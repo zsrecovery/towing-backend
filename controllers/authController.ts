@@ -172,6 +172,21 @@ console.log("User found:", userResult.rows);
       message: "Login failed",
     });
   }
+  console.log("LOGIN BODY:", req.body);
+
+const userResult = await pool.query(
+  "SELECT id, email, password_hash, role FROM users WHERE LOWER(email) = LOWER($1)",
+  [email]
+);
+
+console.log("USER RESULT:", userResult.rows);
+
+const user = userResult.rows[0];
+console.log("HASH FROM DB:", user?.password_hash);
+
+const validPassword = await bcrypt.compare(password, user.password_hash);
+console.log("PASSWORD MATCH:", validPassword);
+
 };
 
 /* =========================
