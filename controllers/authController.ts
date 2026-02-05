@@ -124,6 +124,11 @@ export const loginUser = async (
       });
     }
 
+
+console.log("Login email:", email);
+console.log("User found:", userResult.rows);
+
+
     const user = userResult.rows[0];
     const validPassword = await bcrypt.compare(password, user.password_hash);
 
