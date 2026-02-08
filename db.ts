@@ -1,21 +1,20 @@
 // db.ts
-import pkg from "pg";
-import dotenv from "dotenv";
+import { Pool } from "pg";
+console.log("DATABASE_URL at runtime:", process.env.DATABASE_URL);
 
-dotenv.config();
+if (!process.env.DATABASE_URL) {
+  console.error("❌ DATABASE_URL is missing");
+  process.exit(1);
+}
 
-const { Pool } = pkg;
-
-// Create PostgreSQL connection pool
 export const pool = new Pool({
-  user: process.env.DB_USER,
-  host: process.env.DB_HOST,
-  database: process.env.DB_NAME,
-  password: process.env.DB_PASSWORD,
-  port: Number(process.env.DB_PORT),
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false,
+  },
 });
 
-// Optional: test the connection on startup
+// Test connection on startup
 pool
   .connect()
   .then((client) => {
@@ -24,4 +23,5 @@ pool
   })
   .catch((err) => {
     console.error("❌ PostgreSQL connection error:", err);
+    process.exit(1);
   });
