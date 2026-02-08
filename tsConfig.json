@@ -6,9 +6,9 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "outDir": "dist",       // compiled JS goes here
-    "rootDir": ".",  
-    "lib": ["es2020"],       // root of TS files
+    "outDir": "dist",       
+    "rootDir": ".",
+    "lib": ["es2020"],
     "forceConsistentCasingInFileNames": true
   },
   "include": ["**/*.ts"]
