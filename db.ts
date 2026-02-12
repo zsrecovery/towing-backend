@@ -1,17 +1,23 @@
 // db.ts
 import { Pool } from "pg";
-console.log("DATABASE_URL at runtime:", process.env.DATABASE_URL);
+import dotenv from "dotenv";
 
-if (!process.env.DATABASE_URL) {
+dotenv.config();
+
+const DATABASE_URL = process.env.DATABASE_URL;
+
+if (!DATABASE_URL) {
   console.error("❌ DATABASE_URL is missing");
   process.exit(1);
 }
 
+const isProduction = process.env.NODE_ENV === "production";
+
 export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false,
-  },
+  connectionString: DATABASE_URL,
+  ssl: isProduction
+    ? { rejectUnauthorized: false } // Required for Render
+    : false, // Local development
 });
 
 // Test connection on startup
