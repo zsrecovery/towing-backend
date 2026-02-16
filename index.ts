@@ -5,6 +5,9 @@ import cookieParser from "cookie-parser";
 
 dotenv.config(); // Load .env variables
 
+// ✅ Check if JWT_SECRET is loaded
+console.log("JWT_SECRET at runtime:", process.env.JWT_SECRET)
+
 const PORT = process.env.PORT ? Number(process.env.PORT) : 10000;
 
 const JWT_SECRET = process.env.JWT_SECRET;

@@ -1,13 +1,19 @@
 // routes/user.ts
-import express from "express";
-import type { Request, Response, NextFunction } from "express";
+import express, { Request, Response } from "express";
 import { verifyJWT } from "../middleware/verifyJWT";
 import { getMyProfile } from "../controllers/userController";
-import { UserPayload } from "../types/index";
+import { UserPayload } from "../types";
 
 const router = express.Router();
 
-// Get my profile (any authenticated user)
+// --------------------
+// Public test route
+router.get("/", (_req: Request, res: Response) => {
+  res.json({ message: "User root route works!" });
+});
+
+// --------------------
+// Authenticated route: Get my profile
 router.get(
   "/me",
   verifyJWT,
