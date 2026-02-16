@@ -7,6 +7,7 @@ dotenv.config(); // Load .env variables
 
 // ✅ Check if JWT_SECRET is loaded
 console.log("JWT_SECRET at runtime:", process.env.JWT_SECRET)
+console.log("JWT_REFRESH_SECRET at runtime:", process.env.JWT_REFRESH_SECRET);
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 10000;
 
@@ -15,6 +16,10 @@ if (!JWT_SECRET) {
   console.warn("⚠️ JWT_SECRET is not set. Set it in .env or Render environment variables.");
 }
 
+if (!process.env.JWT_SECRET || !process.env.JWT_REFRESH_SECRET) {
+  console.error("❌ JWT secrets missing! Check .env file.");
+  process.exit(1);
+}
 const app = express();
 
 // --------------------
