@@ -1,5 +1,5 @@
 // controllers/authController.ts
-import type { Request, Response } from "express";
+import type { Request, Response, NextFunction } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { pool } from "../db";
@@ -34,17 +34,17 @@ export const ping = (_req: Request, res: Response) => {
 export const me = (req: AuthRequest, res: Response) => {
   return res.status(200).json({
     status: "success",
-    data: req.user
+    data: req.user,
   });
 };
 
 /* =========================
    Register
 ========================= */
-
 export const registerUser = async (
   req: Request<{}, {}, RegisterBody>,
-  res: Response
+  res: Response,
+  next: NextFunction
 ) => {
   const { name, email, password, role } = req.body;
 
@@ -70,7 +70,6 @@ export const registerUser = async (
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Prevent privilege escalation
     const assignedRole: "user" | "admin" | "driver" =
       role === "driver" ? "driver" : "user";
 
@@ -85,22 +84,20 @@ export const registerUser = async (
       message: "User registered successfully",
       user: result.rows[0],
     });
-  } catch (err: any) {
-    console.error("REGISTER ERROR:", err.message);
-    res.status(500).json({
-      error: "Server Error",
-      message: "Failed to register user",
-    });
+
+  } catch (err) {
+    console.error("REGISTER ERROR:", err);
+    next(err); // 🔥 send unexpected errors to global handler
   }
 };
-
 /* =========================
    Login (ACCESS + REFRESH)
 ========================= */
 
 export const loginUser = async (
   req: Request<{}, {}, LoginBody>,
-  res: Response
+  res: Response,
+  next: NextFunction
 ) => {
   const { email, password } = req.body;
 
@@ -124,11 +121,6 @@ export const loginUser = async (
       });
     }
 
-
-console.log("Login email:", email);
-console.log("User found:", userResult.rows);
-
-
     const user = userResult.rows[0];
     const validPassword = await bcrypt.compare(password, user.password_hash);
 
@@ -148,52 +140,41 @@ console.log("User found:", userResult.rows);
 
     const accessToken = generateAccessToken(payload);
 
-    // ✅ Use the correct refresh secret
-    const refreshToken = jwt.sign(payload, process.env.JWT_REFRESH_SECRET as string, {
-      expiresIn: "7d",
-    });
+    const refreshToken = jwt.sign(
+      payload,
+      process.env.JWT_REFRESH_SECRET as string,
+      { expiresIn: "7d" }
+    );
 
-    // 🔐 Store refresh token in HTTP-only cookie
+    await pool.query(
+      `INSERT INTO refresh_tokens (user_id, token, expires_at)
+       VALUES ($1, $2, NOW() + interval '7 days')`,
+      [user.id, refreshToken]
+    );
+
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production", // false locally
+      secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    res.json({
-      accessToken,
-      user: payload,
-    });
-  } catch (err: any) {
-    console.error("LOGIN ERROR:", err.message);
-    res.status(500).json({
-      error: "Server Error",
-      message: "Login failed",
-    });
+    res.json({ accessToken, user: payload });
+
+  } catch (err) {
+    console.error("LOGIN ERROR:", err);
+    next(err); // 🔥 unexpected errors go to global handler
   }
-  console.log("LOGIN BODY:", req.body);
-
-const userResult = await pool.query(
-  "SELECT id, email, password_hash, role FROM users WHERE LOWER(email) = LOWER($1)",
-  [email]
-);
-
-console.log("USER RESULT:", userResult.rows);
-
-const user = userResult.rows[0];
-console.log("HASH FROM DB:", user?.password_hash);
-
-const validPassword = await bcrypt.compare(password, user.password_hash);
-console.log("PASSWORD MATCH:", validPassword);
-
 };
-
 /* =========================
    Refresh Access Token
 ========================= */
 
-export const refreshAccessToken = (req: Request, res: Response) => {
+export const refreshAccessToken = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   const token = req.cookies?.refreshToken;
 
   if (!token) {
@@ -204,22 +185,41 @@ export const refreshAccessToken = (req: Request, res: Response) => {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET as string) as UserPayload;
+    const tokenResult = await pool.query(
+      `SELECT * FROM refresh_tokens WHERE token=$1`,
+      [token]
+    );
 
-    const accessToken = generateAccessToken({
-      id: decoded.id,
-      name: decoded.name,
-      email: decoded.email,
-      role: decoded.role,
-    });
+    if (!tokenResult.rows.length) {
+      return res.status(401).json({
+        error: "Unauthorized",
+        message: "Token revoked",
+      });
+    }
+
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_REFRESH_SECRET as string
+    ) as UserPayload;
+
+    const accessToken = generateAccessToken(decoded);
 
     res.json({ accessToken });
+
   } catch (err: any) {
-    console.error("Refresh token error:", err.message);
-    res.status(401).json({
-      error: "Unauthorized",
-      message: "Invalid or expired refresh token",
-    });
+
+    // Expected JWT errors → 401
+    if (
+      err.name === "JsonWebTokenError" ||
+      err.name === "TokenExpiredError"
+    ) {
+      return res.status(401).json({
+        error: "Unauthorized",
+        message: "Invalid or expired refresh token",
+      });
+    }
+
+    next(err); // unexpected error
   }
 };
 
@@ -227,7 +227,23 @@ export const refreshAccessToken = (req: Request, res: Response) => {
    Logout
 ========================= */
 
-export const logoutUser = (_req: Request, res: Response) => {
-  res.clearCookie("refreshToken");
-  res.json({ message: "Logged out successfully" });
+export const logoutUser = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  const token = req.cookies.refreshToken;
+
+  try {
+    if (token) {
+      await pool.query(`DELETE FROM refresh_tokens WHERE token=$1`, [token]);
+    }
+
+    res.clearCookie("refreshToken");
+    res.json({ message: "Logged out successfully" });
+
+  } catch (err) {
+    console.error("LOGOUT ERROR:", err);
+    next(err);
+  }
 };

@@ -6,6 +6,13 @@ import { requireRole } from "../middleware/requireRole";
 import { getAllUsers, deleteUser } from "../controllers/adminController";
 import type { UserPayload } from "../types/user";
 import type { AuthenticatedRequest } from "../types/custom.d";
+import { param } from "express-validator";
+import { handleValidationErrors } from "../middleware/handleValidationErrors";
+
+export const userIdParamValidation = [
+  param("id").isInt().withMessage("User ID must be a number"),
+];
+
 const router = express.Router();
 
 
@@ -34,6 +41,8 @@ router.delete(
   "/users/:id",
   verifyJWT,
   requireRole("admin"),
+  userIdParamValidation,
+  handleValidationErrors,
   (req: AuthenticatedRequest<{ id: string }>, res: Response) => { deleteUser(req, res);
   }
 );

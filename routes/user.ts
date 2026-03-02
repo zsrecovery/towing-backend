@@ -17,7 +17,7 @@ router.get("/", (_req: Request, res: Response) => {
 router.get(
   "/me",
   verifyJWT,
-  (req: Request & { user?: UserPayload }, res: Response) => getMyProfile(req, res)
+ getMyProfile
 );
 
 export default router;

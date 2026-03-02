@@ -1,16 +1,18 @@
 // controllers/adminController.ts
 import express from "express";
-import type { Request, Response } from "express";
+import type { Request, Response, NextFunction } from "express";
 import { pool } from "../db";
 
 // Get all users (admin)
-export const getAllUsers = async (_req: Request, res: Response) => {
+export const getAllUsers = async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const result = await pool.query("SELECT id, name, email, role FROM users");
+
     res.json({ users: result.rows });
-  } catch (err: any) {
+
+  } catch (err) {
     console.error("ADMIN GET USERS ERROR:", err);
-    res.status(500).json({ error: "Server error", details: err.message });
+    next(err); // 🔥 send to global error handler
   }
 };
 
